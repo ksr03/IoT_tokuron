@@ -4,6 +4,7 @@ from paho.mqtt import client as mqtt_client
 from flask import Flask
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import TextSendMessage
+import datetime
 
 load_dotenv()
 
@@ -13,8 +14,7 @@ app = Flask(__name__)
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 USER_ID = os.getenv('USER_ID')
-MQTT_TOPIC_TEMP = os.getenv('MQTT_TOPIC_TEMP')
-MQTT_TOPIC_HUMID = os.getenv('MQTT_TOPIC_HUMID')
+MQTT_TOPIC = os.getenv('MQTT_TOPIC')
 
 # LINE Botの設定
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
@@ -36,15 +36,27 @@ def connect_mqtt():
 # MQTTトピックの購読
 def subscribe(client: mqtt_client):
     def on_message(client, userdata, msg):
-        if msg.topic == MQTT_TOPIC_TEMP:
-            text = f"今の気温は {msg.payload.decode()} 度です"
-        elif msg.topic == MQTT_TOPIC_HUMID:
-            text = f"今の湿度は {msg.payload.decode()} %です"
+        data = msg.payload.decode()
 
+        # 気温と湿度を取得
+        temp, humid = data.split(',')
+        temp = float(temp)
+        humid = float(humid)
+
+        # テキストの作成
+        dt_now = datetime.datetime.now()
+        text = f"{dt_now.strftime('%Y/%m/%d %H:%M:%S')}\n気温は {temp} 度、湿度は {humid} %です。"
+        if temp > 28:
+
+            text += "\n注意: 室温が28度以上です。熱中症対策のため、冷房を付けましょう"
+        if humid > 65:
+            text += "\n注意: 湿度が65%以上です。湿度が高いため、水分補給を忘れずに"
+
+        # LINEにメッセージを送信
         line_bot_api.push_message(USER_ID, TextSendMessage(text=text))
-        print('Message sent to LINE')
+        print(f"Message sent to LINE: {text}")
     
-    client.subscribe([(MQTT_TOPIC_TEMP, 0), (MQTT_TOPIC_HUMID, 0)])
+    client.subscribe(MQTT_TOPIC)
     client.on_message = on_message
 
 def run():
@@ -57,7 +69,4 @@ def home():
     return 'Hello, World!'
 
 if __name__ == '__main__':
-    # Start Flask app
-    # app.run(port=3000)
-    # Start MQTT loop
     run()
