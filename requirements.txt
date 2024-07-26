@@ -1,0 +1,4 @@
+paho-mqtt
+line-bot-sdk
+flask
+python-dotenv
